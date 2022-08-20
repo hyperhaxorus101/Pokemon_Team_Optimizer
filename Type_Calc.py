@@ -52,6 +52,15 @@ def getTypeCombos():
 	return sorted(typeCombos)
 
 def createMember(type1, type2 = None):
+	'''
+	Purpose: To create a member object.
+
+	type1: First type of the member.
+
+	type2: The second type of the member.
+
+	Returns: The Member.
+	'''
 
 	file = open(f'Scripts{os.path.sep}types.json', 'r')
 	types = json.load(file)
@@ -62,12 +71,12 @@ def createMember(type1, type2 = None):
 	
 	member = {}
 	member['Types'] = [type1, type2]
-	member['Weaknesses'], member1['Resistances'], member1['Immunities'] = identifyTypeComboInteractions(type1, type2)
+	member['Weaknesses'], member['Resistances'], member['Immunities'] = get_member_defensive_properties(type1, type2)
 	member['Effective'] = [*set(types[type1]['Effective'] + types[type2]['Effective'])]
 
-	return ''
+	return member
 
-def identifyTypeComboInteractions(type1, type2=None):
+def get_member_defensive_properties(type1, type2=None):
 	'''
 	Purpose: To identify defensive type combination properties of user entered type combos.
 
@@ -115,7 +124,7 @@ def identifyTypeComboInteractions(type1, type2=None):
 
 	return sorted(allWeaknesses), sorted(allResistances), sorted(allImmunities)
 
-def identifyTeamTypeComboInteractions(members):
+def get_team_defensive_properties(members):
 	'''
 	Purpose: To identify defensive type combination properties of user entered teams.
 
@@ -188,8 +197,41 @@ def identifyTeamTypeComboInteractions(members):
 
 	return sorted(weaknesses), sorted(resistances), sorted(immunities)
 
+def get_team_offensive_properties(members):
 
-def getLastMemberBasedOnWeaknesses(members, rerun=None):
+	totalEffectiveness = []
+
+	for member in members:
+		totalEffectiveness += members[member]['Effective']
+
+	return [*set(totalEffectiveness)]
+
+def get_final_member_by_STAB_coverage(members):
+	
+	bestNewCombos = []
+	currentEffectiveness = get_team_offensive_properties(members)
+	numSTAB = len(currentEffectiveness)
+
+	newMembers = members.copy()
+
+	types = getTypeCombos()
+
+	for type in types:
+		type1, type2 = type
+		newMember = createMember(type1, type2)
+
+		effectiveness = newMember['Effective']
+
+		tempEffectiveness = [*set(currentEffectiveness + effectiveness)]
+		if len(tempEffectiveness) == numSTAB:
+			bestNewCombos.append([type1, type2])
+		if len(tempEffectiveness) > numSTAB:
+			numSTAB = len(tempEffectiveness)
+			bestNewCombos = [[type1, type2]]
+
+	return bestNewCombos
+
+def get_final_member_by_least_weaknesses(members, rerun=None):
 	'''
 	Purpose: To identify optimal type combinations for a last member based on current resistances and immunities.
 
@@ -206,7 +248,7 @@ def getLastMemberBasedOnWeaknesses(members, rerun=None):
 	newMembers = members.copy()
 
 	if rerun != None:
-		weaknesses, resistances, immunities = identifyTeamTypeComboInteractions(newMembers)
+		weaknesses, resistances, immunities = get_team_defensive_properties(newMembers)
 		minWeaknesses = len(weaknesses)
 	else:
 		minWeaknesses = 109
@@ -217,10 +259,10 @@ def getLastMemberBasedOnWeaknesses(members, rerun=None):
 		type1, type2 = type
 		newMember = {}
 
-		newMember['Weaknesses'], newMember['Resistances'], newMember['Immunities'] = identifyTypeComboInteractions(type1, type2)
+		newMember['Weaknesses'], newMember['Resistances'], newMember['Immunities'] = get_member_defensive_properties(type1, type2)
 		newMembers['Member 6'] = newMember
 
-		weaknesses, resistances, immunities = identifyTeamTypeComboInteractions(newMembers)
+		weaknesses, resistances, immunities = get_team_defensive_properties(newMembers)
 
 		if len(weaknesses) == minWeaknesses:
 			bestNewCombos.append([type1, type2])
@@ -230,12 +272,12 @@ def getLastMemberBasedOnWeaknesses(members, rerun=None):
 			bestNewCombos = [[type1, type2]]
 	
 	if len(bestNewCombos) == 0:
-		bestNewCombos = getLastMemberBasedOnWeaknesses(members, True)
+		bestNewCombos = get_final_member_by_least_weaknesses(members, True)
 
 	return bestNewCombos
 
 
-def filterCombosByResistancesAndImmunities(members, combos):
+def filter_for_maximum_types_resisted(members, combos):
 	'''
 	Purpose: To filter combos further by maximum amount of immunities.
 
@@ -263,7 +305,7 @@ def filterCombosByResistancesAndImmunities(members, combos):
 
 		newMember = {}
 
-		newMember['Weaknesses'], newMember['Resistances'], newMember['Immunities'] = identifyTypeComboInteractions(type1, type2)
+		newMember['Weaknesses'], newMember['Resistances'], newMember['Immunities'] = get_member_defensive_properties(type1, type2)
 		newMembers['Member 6'] = newMember
 
 		resistances = []
@@ -284,8 +326,7 @@ def filterCombosByResistancesAndImmunities(members, combos):
 
 	return filteredCombos	
 
-
-def filterCombosBySTAB(members, combos):
+def filter_for_maximum_STAB_coverage(members, combos):
 	'''
 	Purpose: To filter combos further by STAB supperefective coverage of combos.
 
@@ -304,8 +345,7 @@ def filterCombosBySTAB(members, combos):
 	mostSTABCoverage = 0
 
 	for member in members:
-		type1, type2 = members[member]['Types']
-		effective += [*set(types[type1]['Effective'] + types[type2]['Effective'])]
+		effective += members[member]['Effective']
 	
 	effective = [*set(effective)]
 	mostSTABCoverage = len(effective)
@@ -319,31 +359,82 @@ def filterCombosBySTAB(members, combos):
 			mostSTABCoverage = len(tempEffective)
 			bestCombos = [[type1, type2]]
 	
-
 	return bestCombos
 
 
+def filter_for_least_weaknesses(members, combos, rerun=None):
+	'''
+	Purpose: To filter optimal type combinations for a last member based on current resistances and immunities.
+
+	members: A dictionary corresponding to current members.
+
+	combos: Type combinations already predetermined for filtering.
+
+	rerun: Determines if the current run is a rerun or not. Will rerun if the only 6th member options are
+			suboptimal and will result in more net weaknesses than currently incurred.
+
+	Returns: A list of optimal type combinations.
+	'''
+
+	bestNewCombos = []
+
+	newMembers = members.copy()
+
+	if rerun != None:
+		weaknesses, resistances, immunities = get_team_defensive_properties(newMembers)
+		minWeaknesses = len(weaknesses)
+	else:
+		minWeaknesses = 109
+
+	types = getTypeCombos()
+
+	for combo in combos:
+		type1, type2 = combo
+		newMember = createMember(type1, type2)
+
+		newMembers['Member 6'] = newMember
+
+		weaknesses, resistances, immunities = get_team_defensive_properties(newMembers)
+
+		if len(weaknesses) == minWeaknesses:
+			bestNewCombos.append([type1, type2])
+
+		elif len(weaknesses)<minWeaknesses:
+			minWeaknesses = len(weaknesses)
+			bestNewCombos = [[type1, type2]]
+	
+	if len(bestNewCombos) == 0:
+		bestNewCombos = get_final_member_by_least_weaknesses(members, True)
+
+	return bestNewCombos
+
+def offense_pipeline(members):
+
+	new_combos = get_final_member_by_STAB_coverage(members)
+
+	new_combos = filter_for_least_weaknesses(members, new_combos)
+
+	new_combos = filter_for_maximum_types_resisted(members, new_combos)
+
+	return new_combos
+
+def defense_pipeline(members):
+
+	new_combos = get_final_member_by_least_weaknesses(members)
+
+	new_combos = filter_for_maximum_types_resisted(members, new_combos)
+
+	new_combos = filter_for_maximum_STAB_coverage(members, new_combos)
+
+	return new_combos
 
 if __name__ == '__main__':
 
 
-	member1 = {}
-	member2 = {}
-	member3 = {}
-	member4 = {}
-	member5 = {}
-
-	member1['Types'] = ['Steel', 'Fairy']
-	member2['Types'] = ['Water', 'Ground']
-	member3['Types'] = ['Steel', 'Fairy']
-	member4['Types'] = ['Water', 'Ground']
-	member5['Types'] = ['Flying', 'Flying']
-
-	member1['Weaknesses'], member1['Resistances'], member1['Immunities'] = identifyTypeComboInteractions('Fire', 'Normal')
-	member2['Weaknesses'], member2['Resistances'], member2['Immunities'] = identifyTypeComboInteractions('Water', 'Ground')
-	member3['Weaknesses'], member3['Resistances'], member3['Immunities'] = identifyTypeComboInteractions('Electric', 'Flying')
-	member4['Weaknesses'], member4['Resistances'], member4['Immunities'] = identifyTypeComboInteractions('Psychic', 'Steel')
-	member5['Weaknesses'], member5['Resistances'], member5['Immunities'] = identifyTypeComboInteractions('Ghost', 'Ghost')
+	member1 = createMember('Water', 'Ground')
+	member2 = createMember('Fire', 'Normal')
+	member3 = createMember('Electric', 'Flying')
+	member4 = createMember('Psychic', 'Steel')
 	
 	members = {}
 
@@ -351,11 +442,37 @@ if __name__ == '__main__':
 	members['Member 2'] = member2
 	members['Member 3'] = member3
 	members['Member 4'] = member4
-	members['Member 5'] = member5
+
+	types = getTypeCombos()
+
+	weaknesses = []
+	weaknessesTracker = 109
+	new_member_tracking = []
+
+	for type in types:
+		type1, type2 = type
+
+		member5 = createMember(type1, type2)
+		members['Member 5'] = member5
+
+		new_members = defense_pipeline(members)
+
+		temp_members = members.copy()
+
+		for new_member in new_members:
+			second_type1, second_type2 = new_member
+			new_member = createMember(second_type1, second_type2)
+			temp_members['Member 6'] = new_member
+			weaknesses, resistances, immunities = get_team_defensive_properties(temp_members)
+
+			if len(weaknesses)==weaknessesTracker:
+				new_member_tracking.append([member5, new_member])
+
+			if len(weaknesses)<weaknessesTracker:
+				print('Here')
+				weaknessesTracker = len(weaknesses)
+				new_member_tracking = [[member5, new_member]]
 
 
-	combos = getLastMemberBasedOnWeaknesses(members)
 
-	combos = filterCombosByResistancesAndImmunities(members, combos)
 
-	print(filterCombosBySTAB(members, combos))
