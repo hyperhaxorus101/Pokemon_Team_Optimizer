@@ -87,6 +87,7 @@ def get_member_defensive_properties(type1, type2=None):
 	Returns: Three lists for weaknesses, resistances, and immunities, all sorted by alphabetical order.
 	'''
 
+	# File with data for each type
 	file = open(f'Scripts{os.path.sep}types.json', 'r')
 	types = json.load(file)
 
@@ -104,19 +105,23 @@ def get_member_defensive_properties(type1, type2=None):
 		resistances += types[type2]['Resistances']
 		immunities += types[type2]['Immunities']
 	
+		# Removes duplicates
 		weaknesses = [*set(weaknesses)]
 		resistances = [*set(resistances)]
 		immunities = [*set(immunities)]
 	
+		# Gets net weaknesses
 		for weakness in weaknesses:
 			if weakness not in resistances and weakness not in immunities:
 				allWeaknesses.append(weakness)
 		
+		# Gets net resistances, that arent immunities
 		for resistance in resistances:
 			if resistance not in weaknesses and resistance not in immunities:
 				allResistances.append(resistance)
 
 	else:
+		# If there is only one type, no filtering has to be done
 		allWeaknesses = weaknesses
 		allResistances = resistances
 
@@ -144,6 +149,7 @@ def get_team_defensive_properties(members):
 	
 	uniqueWeaknesses = [*set(weaknesses)]
 
+	# Checks all unique weaknesses, as duplicates are handled via count
 	for weakness in uniqueWeaknesses:
 		if weakness in resistances and weakness not in immunities:
 			weaknessesCount = op.countOf(weaknesses, weakness)
@@ -171,6 +177,7 @@ def get_team_defensive_properties(members):
 				weaknesses = list(filter((weakness).__ne__, weaknesses))
 				immunities = deleteXNumOfElement(weakness, weaknessesCount, immunities)
 
+		# Immunities are given prioritization over weaknesses
 		elif weakness in immunities and weakness in resistances:
 			weaknessesCount = op.countOf(weaknesses, weakness)
 			resistancesCount = op.countOf(resistances, weakness)
@@ -198,6 +205,13 @@ def get_team_defensive_properties(members):
 	return sorted(weaknesses), sorted(resistances), sorted(immunities)
 
 def get_team_offensive_properties(members):
+	'''
+	Purpose: To identify offensive type combination properties of user entered teams.
+
+	members: A dictionary containing dictionaries corresponding to team members and their type interactions.
+
+	Returns: A list of types covered by team STAB.
+	'''
 
 	totalEffectiveness = []
 
@@ -207,6 +221,13 @@ def get_team_offensive_properties(members):
 	return [*set(totalEffectiveness)]
 
 def get_final_member_by_STAB_coverage(members):
+	'''
+	Purpose: To identify optimal type combinations for a last member based on current STAB coverage.
+
+	members: A dictionary corresponding to current members.
+
+	Returns: A list of optimal type combinations.
+	'''
 	
 	bestNewCombos = []
 	currentEffectiveness = get_team_offensive_properties(members)
@@ -277,7 +298,7 @@ def get_final_member_by_least_weaknesses(members, rerun=None):
 	return bestNewCombos
 
 
-def filter_for_maximum_types_resisted(members, combos):
+def filter_for_maximum_types_resisted(members, combos=None):
 	'''
 	Purpose: To filter combos further by maximum amount of immunities.
 
@@ -299,6 +320,9 @@ def filter_for_maximum_types_resisted(members, combos):
 		immunities += members[member]['Immunities']
 
 	maxResistancesAndImmunities = len([*set(resistances + immunities)])
+
+	if combos == None:
+		return maxResistancesAndImmunities
 
 	for combo in combos:
 		type1, type2 = combo
@@ -326,7 +350,7 @@ def filter_for_maximum_types_resisted(members, combos):
 
 	return filteredCombos	
 
-def filter_for_maximum_STAB_coverage(members, combos):
+def filter_for_maximum_STAB_coverage(members, combos=None):
 	'''
 	Purpose: To filter combos further by STAB supperefective coverage of combos.
 
@@ -350,6 +374,9 @@ def filter_for_maximum_STAB_coverage(members, combos):
 	effective = [*set(effective)]
 	mostSTABCoverage = len(effective)
 
+	if combos == None:
+		return mostSTABCoverage
+
 	for combo in combos:
 		type1, type2 = combo
 		tempEffective = [*set(types[type1]['Effective'] + types[type2]['Effective'] + effective)]
@@ -361,8 +388,7 @@ def filter_for_maximum_STAB_coverage(members, combos):
 	
 	return bestCombos
 
-
-def filter_for_least_weaknesses(members, combos, rerun=None):
+def filter_for_least_weaknesses(members, combos=None, rerun=None):
 	'''
 	Purpose: To filter optimal type combinations for a last member based on current resistances and immunities.
 
@@ -380,9 +406,11 @@ def filter_for_least_weaknesses(members, combos, rerun=None):
 
 	newMembers = members.copy()
 
-	if rerun != None:
+	if rerun == None:
 		weaknesses, resistances, immunities = get_team_defensive_properties(newMembers)
 		minWeaknesses = len(weaknesses)
+		if combos == None:
+			return minWeaknesses
 	else:
 		minWeaknesses = 109
 
@@ -404,11 +432,18 @@ def filter_for_least_weaknesses(members, combos, rerun=None):
 			bestNewCombos = [[type1, type2]]
 	
 	if len(bestNewCombos) == 0:
-		bestNewCombos = get_final_member_by_least_weaknesses(members, True)
+		bestNewCombos = filter_for_least_weaknesses(members, combos, True)
 
 	return bestNewCombos
 
 def offense_pipeline(members):
+	'''
+	Purpose: To find an optimal new member while prioritizing offense (STAB coverage).
+
+	members: A dictionary corresponding to current members.
+
+	Returns: A list of optimal type combinations.
+	'''
 
 	new_combos = get_final_member_by_STAB_coverage(members)
 
@@ -419,6 +454,13 @@ def offense_pipeline(members):
 	return new_combos
 
 def defense_pipeline(members):
+	'''
+	Purpose: To find an optimal new member while prioritizing defense least net weaknesses.
+
+	members: A dictionary corresponding to current members.
+
+	Returns: A list of optimal type combinations.
+	'''
 
 	new_combos = get_final_member_by_least_weaknesses(members)
 
@@ -428,13 +470,191 @@ def defense_pipeline(members):
 
 	return new_combos
 
+
+def two_member_defense_pipeline(members):
+	'''
+	Purpose: To find a pair of optimal new members while prioritizing defense (least net weaknesses).
+
+	members: A dictionary corresponding to current members.
+
+	Returns: A list of pairs of optimal type combinations.
+	'''
+
+	members_copy = members.copy()
+
+	types = getTypeCombos()
+
+	weaknesses = []
+	weaknessesTracker = 109
+	resistancesTracker = 0
+	STABTracker = 0
+	new_member_tracking = []
+
+	new_new_memberTracking = []
+
+	new_new_new_memberTracking = []
+
+	for type in types:
+		type1, type2 = type
+
+		member5 = createMember(type1, type2)
+		members_copy['Member 5'] = member5
+
+		temp_members = members_copy.copy()
+
+		for type_again in types:
+			second_type1, second_type2 = type_again
+			member6 = createMember(second_type1, second_type2)
+			temp_members['Member 6'] = member6
+			weaknesses, resistances, immunities = get_team_defensive_properties(temp_members)
+
+			if len(weaknesses)==weaknessesTracker:
+				new_member_tracking.append([member5, member6])
+
+			if len(weaknesses)<weaknessesTracker:
+				weaknessesTracker = len(weaknesses)
+				new_member_tracking = [[member5, member6]]
+		
+
+	for i in range(len(new_member_tracking)):
+		member5 = new_member_tracking[i][0]
+		member6 = new_member_tracking[i][1]
+		members_copy['Member 5'] = member5
+		members_copy['Member 6'] = member6
+
+		tempRes = filter_for_maximum_types_resisted(members_copy)
+
+		if tempRes == resistancesTracker:
+			new_new_memberTracking.append([member5, member6])
+
+		if tempRes > resistancesTracker:
+			resistancesTracker = tempRes
+			new_new_memberTracking = [[member5, member6]]
+	
+	for i in range(len(new_new_memberTracking)):
+		member5 = new_new_memberTracking[i][0]
+		member6 = new_new_memberTracking[i][1]
+		members_copy['Member 5'] = member5
+		members_copy['Member 6'] = member6
+
+		tempSTAB = filter_for_maximum_STAB_coverage(members_copy)
+
+		if tempSTAB == STABTracker:
+			new_new_new_memberTracking.append([member5, member6])
+
+		if tempSTAB > STABTracker:
+			STABTracker = tempSTAB
+			new_new_new_memberTracking = [[member5, member6]]
+
+	return filter_pairs_for_duplicates(new_new_new_memberTracking)
+
+
+def two_member_offense_pipeline(members):
+	'''
+	Purpose: To find a pair of optimal new members while prioritizing offense (most STAB coverage).
+
+	members: A dictionary corresponding to current members.
+
+	Returns: A list of pairs of optimal type combinations.
+	'''
+
+	members_copy = members.copy()
+
+	types = getTypeCombos()
+
+	weaknessesTracker = 109
+	resistancesTracker = 0
+	STABTracker = 0
+	new_member_tracking = []
+
+	new_new_memberTracking = []
+
+	new_new_new_memberTracking = []
+
+	for type in types:
+		type1, type2 = type
+
+		member5 = createMember(type1, type2)
+		members_copy['Member 5'] = member5
+
+		temp_members = members_copy.copy()
+
+		for type_again in types:
+			second_type1, second_type2 = type_again
+			member6 = createMember(second_type1, second_type2)
+			temp_members['Member 6'] = member6
+			effectiveness = get_team_offensive_properties(temp_members)
+
+			if len(effectiveness)==STABTracker:
+				new_member_tracking.append([member5, member6])
+
+			if len(effectiveness)>STABTracker:
+				STABTracker = len(effectiveness)
+				new_member_tracking = [[member5, member6]]
+		
+	
+	for i in range(len(new_member_tracking)):
+		member5 = new_member_tracking[i][0]
+		member6 = new_member_tracking[i][1]
+		members_copy['Member 5'] = member5
+		members_copy['Member 6'] = member6
+
+		tempWeak = filter_for_least_weaknesses(members_copy)
+
+		if tempWeak == weaknessesTracker:
+			new_new_memberTracking.append([member5, member6])
+
+		if tempWeak < weaknessesTracker:
+			weaknessesTracker = tempWeak
+			new_new_memberTracking = [[member5, member6]]
+
+	for i in range(len(new_new_memberTracking)):
+		member5 = new_new_memberTracking[i][0]
+		member6 = new_new_memberTracking[i][1]
+		members_copy['Member 5'] = member5
+		members_copy['Member 6'] = member6
+
+		tempRes = filter_for_maximum_types_resisted(members_copy)
+
+		if tempRes == resistancesTracker:
+			new_new_new_memberTracking.append([member5, member6])
+
+		if tempRes > resistancesTracker:
+			resistancesTracker = tempRes
+			new_new_new_memberTracking = [[member5, member6]]
+
+	return filter_pairs_for_duplicates(new_new_new_memberTracking)
+
+def filter_pairs_for_duplicates(new_members):
+	'''
+	Purpose: To filter pairs for duplicates.
+
+	new_members: A dictionary corresponding to pairs of potential new members.
+
+	Returns: A list of pairs of optimal type combinations that have been filtered.
+	'''
+
+	filtered_pairs = []
+	existing_pairs = []
+
+	for i in range(len(new_members)):
+		
+		full_combo = sorted([new_members[i][0]['Types'], new_members[i][1]['Types']])
+
+		if full_combo not in existing_pairs:
+			existing_pairs.append(full_combo)
+			filtered_pairs.append(new_members[i])
+
+
+	return filtered_pairs
+
 if __name__ == '__main__':
 
 
-	member1 = createMember('Water', 'Ground')
-	member2 = createMember('Fire', 'Normal')
-	member3 = createMember('Electric', 'Flying')
-	member4 = createMember('Psychic', 'Steel')
+	member1 = createMember('Psychic', 'Fairy')
+	member2 = createMember('Water', 'Water')
+	member3 = createMember('Normal', 'Poison')
+	member4 = createMember('Dragon', 'Dragon')
 	
 	members = {}
 
@@ -443,36 +663,12 @@ if __name__ == '__main__':
 	members['Member 3'] = member3
 	members['Member 4'] = member4
 
-	types = getTypeCombos()
 
-	weaknesses = []
-	weaknessesTracker = 109
-	new_member_tracking = []
+	optimalMembers = two_member_defense_pipeline(members)
 
-	for type in types:
-		type1, type2 = type
+	for i in range(len(optimalMembers)):
 
-		member5 = createMember(type1, type2)
-		members['Member 5'] = member5
-
-		new_members = defense_pipeline(members)
-
-		temp_members = members.copy()
-
-		for new_member in new_members:
-			second_type1, second_type2 = new_member
-			new_member = createMember(second_type1, second_type2)
-			temp_members['Member 6'] = new_member
-			weaknesses, resistances, immunities = get_team_defensive_properties(temp_members)
-
-			if len(weaknesses)==weaknessesTracker:
-				new_member_tracking.append([member5, new_member])
-
-			if len(weaknesses)<weaknessesTracker:
-				print('Here')
-				weaknessesTracker = len(weaknesses)
-				new_member_tracking = [[member5, new_member]]
-
-
-
+		print(optimalMembers[i][0]['Types'])
+		print(optimalMembers[i][1]['Types'])
+		print('\n')
 
